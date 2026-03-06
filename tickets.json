@@ -1,0 +1,172 @@
+{
+  "1022": {
+    "id": "1022",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "closed",
+    "channelId": "1476656016933261476",
+    "openedAt": 1772132629930,
+    "replies": [],
+    "closedAt": 1772135633341
+  },
+  "1067": {
+    "id": "1067",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "closed",
+    "channelId": "1476653105436168313",
+    "openedAt": 1772131936328,
+    "replies": [],
+    "closedAt": 1772132479778
+  },
+  "2034": {
+    "id": "2034",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "closed",
+    "channelId": "1476628333360975890",
+    "openedAt": 1772126030701,
+    "replies": [],
+    "closedAt": 1772126309669
+  },
+  "3478": {
+    "id": "3478",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "open",
+    "channelId": "1476668828439154900",
+    "openedAt": 1772135684474,
+    "replies": []
+  },
+  "4118": {
+    "id": "4118",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "open",
+    "channelId": "1476671871079551046",
+    "openedAt": 1772136410311,
+    "replies": [
+      {
+        "author": "nakiah2905",
+        "message": "hello",
+        "timestamp": 1772136418757
+      },
+      {
+        "author": "nakiah2905",
+        "message": "wwww",
+        "timestamp": 1772136430255
+      }
+    ]
+  },
+  "4786": {
+    "id": "4786",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "closed",
+    "channelId": "1476660406259814508",
+    "openedAt": 1772133676487,
+    "replies": [],
+    "closedAt": 1772135628995
+  },
+  "6933": {
+    "id": "6933",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "open",
+    "channelId": "1476628907011739699",
+    "openedAt": 1772126167320,
+    "replies": [
+      {
+        "author": "nakiah2905",
+        "message": "Hello",
+        "timestamp": 1772126188603
+      },
+      {
+        "author": "nakiah2905",
+        "message": "testing",
+        "timestamp": 1772126222337
+      }
+    ],
+    "claimedBy": "1466202312996421728"
+  },
+  "7438": {
+    "id": "7438",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "open",
+    "channelId": "1476672185421664298",
+    "openedAt": 1772136485108,
+    "replies": [
+      {
+        "author": "nakiah2905",
+        "message": "www",
+        "timestamp": 1772136511090
+      },
+      {
+        "author": "nakiah2905",
+        "message": "fff",
+        "timestamp": 1772136519349
+      }
+    ]
+  },
+  "8139": {
+    "id": "8139",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "open",
+    "channelId": "1476670941424521325",
+    "openedAt": 1772136188335,
+    "replies": [
+      {
+        "author": "nakiah2905",
+        "message": "testing",
+        "timestamp": 1772136301955
+      },
+      {
+        "author": "nakiah2905",
+        "message": "what to check",
+        "timestamp": 1772136382796
+      }
+    ]
+  },
+  "8142": {
+    "id": "8142",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "open",
+    "channelId": "1476670180305277120",
+    "openedAt": 1772136006877,
+    "replies": []
+  },
+  "8160": {
+    "id": "8160",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "closed",
+    "channelId": "1476662319932117145",
+    "openedAt": 1772134132547,
+    "replies": [],
+    "closedAt": 1772135638713
+  },
+  "9283": {
+    "id": "9283",
+    "userId": "1039098781641216050",
+    "subject": "Support Request",
+    "description": "No description provided.",
+    "status": "open",
+    "channelId": "1476684281748131852",
+    "openedAt": 1772139369913,
+    "replies": []
+  }
+}
