@@ -15,7 +15,7 @@ const {
 const fs = require("fs");
 const https = require("https");
 
-// ─── Config ────────────────────────────────────────────────────────────────
+// ─── Configuration ─────────────────────────────────────────────────────────
 const CONFIG = {
   token: process.env.DISCORD_TOKEN,
   guildId: process.env.GUILD_ID,
@@ -26,7 +26,7 @@ const CONFIG = {
   geminiKey: process.env.GEMINI_API_KEY || null,
 };
 
-// ─── Storage ───────────────────────────────────────────────────────────────
+// ─── Database Helpers ──────────────────────────────────────────────────────
 const DB_PATH = "./tickets.json";
 function loadDB() {
   if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, JSON.stringify({}));
@@ -36,7 +36,7 @@ function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-// ─── Client ────────────────────────────────────────────────────────────────
+// ─── Discord Client ────────────────────────────────────────────────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -47,7 +47,7 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// ─── Utility Functions ─────────────────────────────────────────────────────
 function generateTicketId() {
   return Math.floor(1000 + Math.random() * 9000).toString();
 }
@@ -58,7 +58,7 @@ function isAdmin(member, guild) {
   return member?.roles.cache.has(CONFIG.adminRoleId) || guild.ownerId === member?.id;
 }
 
-// ─── Issue classifier ──────────────────────────────────────────────────────
+// ─── Issue Classifier ──────────────────────────────────────────────────────
 function classifyIssue(text) {
   const t = text.toLowerCase();
   if (/login|log in|sign in|password|2fa|two factor|locked out|cant access|cannot access|account access/.test(t)) return "login";
@@ -72,21 +72,21 @@ function classifyIssue(text) {
   return "general";
 }
 
-// ─── Required fields per issue type ───────────────────────────────────────
+// ─── Required Fields per Issue Type ───────────────────────────────────────
 function getRequiredFields(issueType) {
   switch (issueType) {
-    case "login":   return ["issue", "walletType", "duration"];
-    case "seed":    return ["issue", "walletType", "duration"];
-    case "swap":    return ["issue", "walletType", "walletAddress", "amount"];
-    case "tx":      return ["issue", "walletType", "walletAddress", "transactionId", "amount"];
-    case "hack":    return ["issue", "walletType", "walletAddress", "amount", "duration"];
-    case "lost":    return ["issue", "walletType", "walletAddress", "duration"];
-    case "transfer":return ["issue", "walletType", "walletAddress", "amount"];
-    default:        return ["issue", "walletType", "walletAddress", "duration"];
+    case "login":    return ["issue", "walletType", "duration"];
+    case "seed":     return ["issue", "walletType", "duration"];
+    case "swap":     return ["issue", "walletType", "walletAddress", "amount"];
+    case "tx":       return ["issue", "walletType", "walletAddress", "transactionId", "amount"];
+    case "hack":     return ["issue", "walletType", "walletAddress", "amount", "duration"];
+    case "lost":     return ["issue", "walletType", "walletAddress", "duration"];
+    case "transfer": return ["issue", "walletType", "walletAddress", "amount"];
+    default:         return ["issue", "walletType", "walletAddress", "duration"];
   }
 }
 
-// ─── Next question based on what is missing ───────────────────────────────
+// ─── Next Question Logic ───────────────────────────────────────────────────
 function getNextQuestion(collected, issueType, username) {
   const required = getRequiredFields(issueType);
   const c = collected || {};
@@ -95,78 +95,68 @@ function getNextQuestion(collected, issueType, username) {
     if (!c[field]) {
       switch (field) {
         case "walletType":
-          return `What type of wallet are you using? (e.g. **MetaMask**, **Trust Wallet**, **OKX**, **Coinbase**, **Phantom**, **Ledger**) 💼`;
+          return `Which wallet are you using? (e.g. **MetaMask**, **Trust Wallet**, **OKX**, **Coinbase**, **Phantom**, **Ledger**) 💼`;
         case "walletAddress":
-          return `Please provide your **wallet address** so I can investigate on the blockchain. 🔗`;
+          return `Please share your **wallet address** so our team can investigate on-chain. 🔗`;
         case "duration":
-          return `How long have you been experiencing this issue? (e.g. just today, a few hours, since yesterday, over a week) 🕐`;
+          return `How long has this been happening? (e.g. just started, a few hours, since yesterday, over a week) 🕐`;
         case "transactionId":
-          return `Do you have a **transaction ID / hash** for this issue? If yes paste it below, if not type **No**. 🔎`;
+          return `Do you have the **transaction hash / ID** linked to this issue? Paste it below — or type **No** if you don't. 🔎`;
         case "amount":
-          return `What **amount** is involved? Please include the coin/token name (e.g. **0.5 ETH**, **200 USDT**, **0.002 BTC**). 💰`;
+          return `What **amount** is involved? Include the token name (e.g. **0.5 ETH**, **150 USDT**, **0.01 BTC**). 💰`;
       }
     }
   }
-  return null; // all fields collected
+  return null;
 }
 
-// ─── Extract info from user message ───────────────────────────────────────
+// ─── Info Extractor ────────────────────────────────────────────────────────
 function extractInfo(text, collected) {
   const t = text.trim().toLowerCase();
   const c = { ...collected };
 
-  // Wallet type
+  // Wallet type detection
   const wallets = ["metamask","trust wallet","trustwallet","coinbase","phantom","ledger","trezor","okx","bybit","binance","kraken","exodus","rainbow","argent","safe","imtoken","tokenpocket","bitkeep","safepal","mathwallet","coin98","near","petra","solflare","backpack"];
   if (!c.walletType) {
     const found = wallets.find(w => t.includes(w));
     if (found) c.walletType = found.charAt(0).toUpperCase() + found.slice(1);
   }
 
-  // Wallet address
+  // Wallet address detection
   if (!c.walletAddress && /0x[0-9a-fA-F]{10,}/i.test(text.trim())) {
     const match = text.trim().match(/0x[0-9a-fA-F]{40}/i);
     if (match) c.walletAddress = match[0];
   }
 
-  // Transaction hash (long hex string)
+  // Transaction hash detection
   if (!c.transactionId) {
     const txMatch = text.trim().match(/0x[0-9a-fA-F]{60,}/i);
     if (txMatch) c.transactionId = txMatch[0];
     else if (/no transaction|no tx|don.t have|dont have|no hash|n\/a/i.test(t)) c.transactionId = "Not provided";
   }
 
-  // Amount — accept anything that could reasonably be an amount
+  // Amount detection
   if (!c.amount) {
     const tAmt = text.trim().toLowerCase();
-    // "no", "none", "n/a" — user has no amount to provide
     if (/^(no|none|n\/a|na|not sure|unknown|nothing|no amount|i don.t know|dont know)$/.test(tAmt)) {
       c.amount = "Not specified";
-    }
-    // number + coin name (e.g. "200 usdt", "0.5 eth", "1000 memecoin")
-    else if (/[\d,.]+\s*[a-zA-Z]+/.test(text) && !/^0x/i.test(text.trim())) {
+    } else if (/[\d,.]+\s*[a-zA-Z]+/.test(text) && !/^0x/i.test(text.trim())) {
       const m = text.match(/[\d,.]+\s*[a-zA-Z]+/);
       if (m) c.amount = m[0].trim();
-    }
-    // dollar sign (e.g. "$200", "$1,500")
-    else if (/\$[\d,.]+/.test(text)) {
+    } else if (/\$[\d,.]+/.test(text)) {
       const m = text.match(/\$[\d,.]+/);
       if (m) c.amount = m[0].trim();
-    }
-    // plain number only (e.g. "200", "1000", "0.5")
-    else if (/^[\d,.]+$/.test(tAmt)) {
+    } else if (/^[\d,.]+$/.test(tAmt)) {
       c.amount = text.trim();
-    }
-    // coin/token name only with no number (e.g. "memecoin", "shiba inu", "pepe token")
-    else if (tAmt.length > 3 && tAmt.length < 40 && /^[a-z][a-z\s]*(coin|token|swap|inu|finance|protocol|dao|cash|usd)?$/i.test(tAmt) && !["metamask","coinbase","phantom","ledger","trezor","binance","exodus","rainbow","trustwallet","trust wallet","okx","bybit","kraken"].includes(tAmt) && !/wallet|address|issue|problem|error|help|support/.test(tAmt)) {
+    } else if (tAmt.length > 3 && tAmt.length < 40 && /^[a-z][a-z\s]*(coin|token|swap|inu|finance|protocol|dao|cash|usd)?$/i.test(tAmt) && !["metamask","coinbase","phantom","ledger","trezor","binance","exodus","rainbow","trustwallet","trust wallet","okx","bybit","kraken"].includes(tAmt) && !/wallet|address|issue|problem|error|help|support/.test(tAmt)) {
       c.amount = text.trim();
-    }
-    // number + usd/dollars (e.g. "200 usd", "200 dollars worth")
-    else if (/[\d,.]+\s*(usd|dollars?|worth)/i.test(text)) {
+    } else if (/[\d,.]+\s*(usd|dollars?|worth)/i.test(text)) {
       const m = text.match(/[\d,.]+\s*(usd|dollars?|worth)/i);
       if (m) c.amount = m[0].trim();
     }
   }
-  // Duration
+
+  // Duration detection
   if (!c.duration) {
     if (/just now|just started|right now|few minutes|minutes ago/i.test(t)) c.duration = "Just started";
     else if (/today|this morning|this afternoon|this evening|few hours|hours ago/i.test(t)) c.duration = "Today";
@@ -182,33 +172,33 @@ function extractInfo(text, collected) {
   return c;
 }
 
-// ─── Is junk ──────────────────────────────────────────────────────────────
+// ─── Junk Message Detection ────────────────────────────────────────────────
 function isJunk(text) {
   const t = text.trim().toLowerCase();
   if (t.length <= 1) return true;
-  if (/^(.){3,}$/.test(t)) return true;
-  if (/^[b-df-hj-np-tv-z]{4,}$/i.test(t)) return true; // no vowels
+  if (/^(.){3,}$/.test(t)) return true;
+  if (/^[b-df-hj-np-tv-z]{4,}$/i.test(t)) return true;
   const junk = ["ok","okay","k","kk","lol","lmao","haha","idk","um","uh","hmm","test","...","??","fine","good","nice","cool","great","sure","yep","nope","yeah","nah"];
   return junk.includes(t);
 }
 
-// ─── Is greeting ──────────────────────────────────────────────────────────
+// ─── Greeting Detection ────────────────────────────────────────────────────
 function isGreeting(text) {
   const t = text.trim().toLowerCase();
   const greetings = ["hi","hey","hello","hii","heyyy","good morning","good afternoon","good evening","morning","afternoon","howdy","sup","yo","whats up","what's up"];
   return greetings.some(g => t === g || t === g + "!" || t === g + "?");
 }
 
-// ─── Gemini (optional enhancement) ────────────────────────────────────────
+// ─── Gemini AI Enhancement (Optional) ─────────────────────────────────────
 async function tryGemini(conversationHistory, geminiKey) {
   if (!geminiKey) return null;
   try {
-    const prompt = `You are a crypto support ticket bot. Analyze this conversation and extract any information the user has provided.
+    const prompt = `You are a crypto support assistant. Analyze this conversation and extract any relevant details the user has shared.
 
 Conversation:
 ${conversationHistory}
 
-Reply ONLY with this JSON, no other text:
+Respond ONLY with the following JSON and nothing else:
 {"issue":"summary or null","walletType":"name or null","walletAddress":"address or null","duration":"how long or null","transactionId":"hash or null","amount":"amount or null","issueType":"login|seed|swap|tx|hack|lost|transfer|general"}`;
 
     const postData = JSON.stringify({
@@ -239,22 +229,22 @@ Reply ONLY with this JSON, no other text:
     const clean = text.replace(/```json|```/g, "").trim();
     return JSON.parse(clean);
   } catch (e) {
-    console.log("Gemini optional enhancement failed:", e.message);
+    console.log("Gemini enhancement skipped:", e.message);
     return null;
   }
 }
 
-// ─── Panel ─────────────────────────────────────────────────────────────────
+// ─── Panel Builder ─────────────────────────────────────────────────────────
 function buildPanelEmbed() {
   return new EmbedBuilder()
-    .setTitle("Ticket Creation 📨")
-    .setDescription("Please click on the button below to create a ticket 👇")
+    .setTitle("Open a Support Ticket 🎫")
+    .setDescription("Need assistance? Hit the button below to get started 👇")
     .setColor(0x2b2d31)
-    .setAuthor({ name: "Support Ticket", iconURL: client.user.displayAvatarURL() });
+    .setAuthor({ name: "Help Desk", iconURL: client.user.displayAvatarURL() });
 }
 function buildPanelRow() {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("open_ticket").setLabel("Create Ticket").setEmoji("📨").setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId("open_ticket").setLabel("New Ticket").setEmoji("🎫").setStyle(ButtonStyle.Secondary)
   );
 }
 async function sendPanel(channel) {
@@ -262,72 +252,76 @@ async function sendPanel(channel) {
   await channel.send({ embeds: [buildPanelEmbed()], components: [buildPanelRow()] });
 }
 
-// ─── Ready ─────────────────────────────────────────────────────────────────
+// ─── Bot Ready ─────────────────────────────────────────────────────────────
 client.once("clientReady", async () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+  console.log(`✅ Connected as ${client.user.tag}`);
   const guild = client.guilds.cache.get(CONFIG.guildId);
   if (!guild) return console.error("❌ Guild not found.");
   await guild.commands.set([
-    { name: "panel", description: "Post the ticket panel (admin only)" },
-    { name: "tickets", description: "List all tickets (admin only)" },
-    { name: "ticket", description: "Look up a ticket by ID (admin only)", options: [{ name: "id", description: "Ticket ID", type: 3, required: true }] },
-    { name: "mystatus", description: "Check your open tickets" },
+    { name: "panel", description: "Deploy the ticket panel (admin only)" },
+    { name: "tickets", description: "View all active tickets (admin only)" },
+    { name: "ticket", description: "Pull up a specific ticket by ID (admin only)", options: [{ name: "id", description: "Ticket ID", type: 3, required: true }] },
+    { name: "mystatus", description: "View your own submitted tickets" },
   ]);
-  console.log("✅ Slash commands registered.");
+  console.log("✅ Slash commands synced.");
 });
 
-// ─── Interactions ──────────────────────────────────────────────────────────
+// ─── Interaction Handler ───────────────────────────────────────────────────
 client.on("interactionCreate", async (interaction) => {
   const guild = interaction.guild;
 
+  // /panel
   if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
-    if (!isAdmin(interaction.member, guild)) return interaction.reply({ content: "❌ Admins only.", flags: 64 });
+    if (!isAdmin(interaction.member, guild)) return interaction.reply({ content: "❌ Admin access required.", flags: 64 });
     await sendPanel(interaction.channel);
-    return interaction.reply({ content: "✅ Panel sent!", flags: 64 });
+    return interaction.reply({ content: "✅ Ticket panel deployed!", flags: 64 });
   }
 
+  // /tickets
   if (interaction.isChatInputCommand() && interaction.commandName === "tickets") {
-    if (!isAdmin(interaction.member, guild)) return interaction.reply({ content: "❌ Admins only.", flags: 64 });
+    if (!isAdmin(interaction.member, guild)) return interaction.reply({ content: "❌ Admin access required.", flags: 64 });
     const db = loadDB();
     const entries = Object.values(db);
-    if (!entries.length) return interaction.reply({ content: "No tickets yet.", flags: 64 });
+    if (!entries.length) return interaction.reply({ content: "No tickets on record.", flags: 64 });
     const list = entries.slice(-20).map((t) => `${statusEmoji(t.status)} **#${t.id}** *(${t.status})* — <@${t.userId}>`).join("\n");
-    return interaction.reply({ embeds: [new EmbedBuilder().setTitle("📋 All Tickets (last 20)").setDescription(list).setColor(0x5865f2)], flags: 64 });
+    return interaction.reply({ embeds: [new EmbedBuilder().setTitle("📋 Ticket Overview (last 20)").setDescription(list).setColor(0x5865f2)], flags: 64 });
   }
 
+  // /ticket
   if (interaction.isChatInputCommand() && interaction.commandName === "ticket") {
-    if (!isAdmin(interaction.member, guild)) return interaction.reply({ content: "❌ Admins only.", flags: 64 });
+    if (!isAdmin(interaction.member, guild)) return interaction.reply({ content: "❌ Admin access required.", flags: 64 });
     const id = interaction.options.getString("id");
     const db = loadDB();
     const ticket = db[id];
-    if (!ticket) return interaction.reply({ content: `❌ Ticket #${id} not found.`, flags: 64 });
+    if (!ticket) return interaction.reply({ content: `❌ No ticket found with ID #${id}.`, flags: 64 });
     const c = ticket.collected || {};
     const embed = new EmbedBuilder()
       .setTitle(`🎫 Ticket #${ticket.id}`)
       .setColor(ticket.status === "open" ? 0x57f287 : 0xed4245)
       .addFields(
         { name: "Status", value: `${statusEmoji(ticket.status)} ${ticket.status}`, inline: true },
-        { name: "Opened by", value: `<@${ticket.userId}>`, inline: true },
+        { name: "Submitted by", value: `<@${ticket.userId}>`, inline: true },
         { name: "Opened at", value: new Date(ticket.openedAt).toUTCString() },
         { name: "Issue", value: c.issue || "Not provided" },
         { name: "Wallet Type", value: c.walletType || "Not provided", inline: true },
         { name: "Wallet Address", value: c.walletAddress || "Not provided", inline: true },
-        { name: "Duration", value: c.duration || "Not applicable", inline: true },
-        { name: "Transaction ID", value: c.transactionId || "Not applicable", inline: true },
-        { name: "Amount", value: c.amount || "Not applicable", inline: true },
+        { name: "Duration", value: c.duration || "N/A", inline: true },
+        { name: "Transaction ID", value: c.transactionId || "N/A", inline: true },
+        { name: "Amount", value: c.amount || "N/A", inline: true },
       );
     return interaction.reply({ embeds: [embed], flags: 64 });
   }
 
+  // /mystatus
   if (interaction.isChatInputCommand() && interaction.commandName === "mystatus") {
     const db = loadDB();
     const myTickets = Object.values(db).filter((t) => t.userId === interaction.user.id);
-    if (!myTickets.length) return interaction.reply({ content: "You have no tickets.", flags: 64 });
+    if (!myTickets.length) return interaction.reply({ content: "You haven't submitted any tickets yet.", flags: 64 });
     const list = myTickets.map((t) => `${statusEmoji(t.status)} **#${t.id}** *(${t.status})*`).join("\n");
     return interaction.reply({ embeds: [new EmbedBuilder().setTitle("🎫 Your Tickets").setDescription(list).setColor(0x5865f2)], flags: 64 });
   }
 
-  // ── Create Ticket ─────────────────────────────────────────────────────────
+  // ── Open Ticket Button ────────────────────────────────────────────────────
   if (interaction.isButton() && interaction.customId === "open_ticket") {
     await interaction.deferReply({ flags: 64 });
     const ticketId = generateTicketId();
@@ -343,13 +337,13 @@ client.on("interactionCreate", async (interaction) => {
     let channel;
     try {
       channel = await guild.channels.create({
-        name: `ticket-${username.toLowerCase().replace(/[^a-z0-9]/g, "")}${ticketId}`,
+        name: `support-${username.toLowerCase().replace(/[^a-z0-9]/g, "")}${ticketId}`,
         type: ChannelType.GuildText,
         parent: CONFIG.supportCategoryId ?? null,
         permissionOverwrites,
       });
     } catch (err) {
-      return interaction.editReply({ content: "Failed to create ticket. Please contact an admin." });
+      return interaction.editReply({ content: "Unable to open a ticket right now. Please reach out to an admin." });
     }
     const db = loadDB();
     db[ticketId] = {
@@ -368,62 +362,70 @@ client.on("interactionCreate", async (interaction) => {
       infoComplete: false,
     };
     saveDB(db);
+
     const ticketEmbed = new EmbedBuilder()
-      .setAuthor({ name: "Support Ticket", iconURL: client.user.displayAvatarURL() })
-      .setTitle("Ticket Created 📨")
-      .setDescription(`Thanks **${username}** for contacting the support team.\nPlease explain your case so we can help you as quickly as possible.`)
+      .setAuthor({ name: "Help Desk", iconURL: client.user.displayAvatarURL() })
+      .setTitle("Ticket Opened 🎫")
+      .setDescription(`Welcome **${username}** — our support team is here to help.\nPlease describe your issue in as much detail as possible so we can resolve it quickly.`)
       .setColor(0x2b2d31);
+
     const actionRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`claim_${ticketId}`).setLabel("Claim").setEmoji("📨").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`claim_${ticketId}`).setLabel("Take Ticket").setEmoji("🎫").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`close_${ticketId}`).setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Danger)
     );
+
     const ticketMsg = await channel.send({ embeds: [ticketEmbed], components: [actionRow] });
     await ticketMsg.pin().catch(() => {});
-    await ticketMsg.reply(`Hello <@${interaction.user.id}>, how may I assist you today?`);
-    return interaction.editReply({ content: `Ticket created! Please check <#${channel.id}>` });
+    await ticketMsg.reply(`Hi <@${interaction.user.id}>! What can we help you with today?`);
+    return interaction.editReply({ content: `Your ticket is ready! Head over to <#${channel.id}>` });
   }
 
-  // ── Claim ─────────────────────────────────────────────────────────────────
+  // ── Take Ticket Button ────────────────────────────────────────────────────
   if (interaction.isButton() && interaction.customId.startsWith("claim_")) {
-    if (!isAdmin(interaction.member, guild)) return interaction.reply({ content: "❌ No permission.", flags: 64 });
+    if (!isAdmin(interaction.member, guild)) return interaction.reply({ content: "❌ Insufficient permissions.", flags: 64 });
     await interaction.deferReply({ flags: 64 });
     const ticketId = interaction.customId.split("_")[1];
     const db = loadDB();
     if (!db[ticketId]) return interaction.editReply({ content: "❌ Ticket not found." });
-    if (db[ticketId].claimedBy) return interaction.editReply({ content: `❌ Already claimed by <@${db[ticketId].claimedBy}>.` });
+    if (db[ticketId].claimedBy) return interaction.editReply({ content: `❌ This ticket is already assigned to <@${db[ticketId].claimedBy}>.` });
     db[ticketId].claimedBy = interaction.user.id;
     saveDB(db);
-    const claimedEmbed = new EmbedBuilder()
-      .setAuthor({ name: "Support Ticket", iconURL: client.user.displayAvatarURL() })
-      .setTitle("Ticket Claimed ✅")
-      .setDescription(`Thanks <@${db[ticketId].userId}> for contacting the support team.\nYour ticket has been assigned to **${interaction.user.username}**.`)
+
+    const assignedEmbed = new EmbedBuilder()
+      .setAuthor({ name: "Help Desk", iconURL: client.user.displayAvatarURL() })
+      .setTitle("Agent Assigned ✅")
+      .setDescription(`Hey <@${db[ticketId].userId}>, thanks for reaching out!\nYour case is now being handled by **${interaction.user.username}**.`)
       .setColor(0x5865f2);
+
     const updatedRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`claim_${ticketId}`).setLabel("Claimed").setEmoji("✅").setStyle(ButtonStyle.Primary).setDisabled(true),
+      new ButtonBuilder().setCustomId(`claim_${ticketId}`).setLabel("Assigned").setEmoji("✅").setStyle(ButtonStyle.Primary).setDisabled(true),
       new ButtonBuilder().setCustomId(`close_${ticketId}`).setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Danger)
     );
-    await interaction.message.edit({ embeds: [claimedEmbed], components: [updatedRow] });
-    await interaction.channel.setName(`claimed-${interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, "")}`).catch(() => {});
-    await interaction.channel.send(`<@${interaction.user.id}> is now handling this ticket`);
+
+    await interaction.message.edit({ embeds: [assignedEmbed], components: [updatedRow] });
+    await interaction.channel.setName(`active-${interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, "")}`).catch(() => {});
+    await interaction.channel.send(`<@${interaction.user.id}> has taken this ticket and will be assisting you.`);
+
     const agentAvatar = interaction.user.displayAvatarURL({ dynamic: true, size: 128 });
     const sessionEmbed = new EmbedBuilder()
-      .setTitle("📨 Session Initialized")
+      .setTitle("🎫 Live Session Started")
       .setDescription(
         `**Agent:** <@${interaction.user.id}>\n` +
-        `**Response Time:** less than 1 min\n` +
-        `**Status:** 🧍 Human-review\n\n` +
-        `🛡️ **Verification Status**\n` +
-        "```css\n✅ Verified Support Specialist```"
+        `**Response Time:** Under 1 minute\n` +
+        `**Status:** 🧍 Under Review\n\n` +
+        `🛡️ **Agent Verification**\n` +
+        "```css\n✅ Certified Support Specialist```"
       )
       .setThumbnail(agentAvatar)
       .setColor(0x2b2d31)
-      .setFooter({ text: `📨 • Today at ${new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}` });
+      .setFooter({ text: `🎫 • Today at ${new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}` });
+
     await interaction.channel.send({ embeds: [sessionEmbed] });
-    await interaction.channel.send("I understand you need help. Let me connect you with our support team who can assist you better.");
-    return interaction.editReply({ content: "✅ You have claimed this ticket." });
+    await interaction.channel.send("You're now connected with our support team. Please stand by while we review your case.");
+    return interaction.editReply({ content: "✅ Ticket successfully assigned to you." });
   }
 
-  // ── Close ─────────────────────────────────────────────────────────────────
+  // ── Close Ticket Button ───────────────────────────────────────────────────
   if (interaction.isButton() && interaction.customId.startsWith("close_")) {
     if (!isAdmin(interaction.member, guild)) return interaction.reply({ content: "❌ Admins only.", flags: 64 });
     const ticketId = interaction.customId.split("_")[1];
@@ -434,21 +436,21 @@ client.on("interactionCreate", async (interaction) => {
     saveDB(db);
     await interaction.channel.send(
       `🔒 This ticket has been **closed** by **${interaction.user.username}**.\n\n` +
-      `Thank you <@${db[ticketId].userId}> for reaching out! We hope your issue has been resolved 🙏\n\n` +
-      `If you need further help, open a **new ticket** anytime in <#${CONFIG.ticketPanelChannelId}>.\n\n` +
-      `This channel will be deleted in **10 seconds**.`
+      `Thank you <@${db[ticketId].userId}> for getting in touch — we hope your issue is resolved! 🙏\n\n` +
+      `If anything else comes up, feel free to open a new ticket in <#${CONFIG.ticketPanelChannelId}>.\n\n` +
+      `This channel will be removed in **10 seconds**.`
     );
     await interaction.reply({ content: "✅ Closing ticket...", flags: 64 });
     setTimeout(async () => { await interaction.channel.delete().catch(() => {}); }, 10000);
   }
 });
 
-// ─── New Member Join ───────────────────────────────────────────────────────
+// ─── New Member Alert ──────────────────────────────────────────────────────
 client.on("guildMemberAdd", async (member) => {
   try {
     const owner = await member.guild.fetchOwner();
     await owner.send(`🔔 **${member.user.username}** just joined **${member.guild.name}**.`);
-  } catch { console.log("Could not DM owner."); }
+  } catch { console.log("Could not DM server owner."); }
 });
 
 // ─── Message Handler ───────────────────────────────────────────────────────
@@ -467,7 +469,7 @@ client.on("messageCreate", async (message) => {
     if (!replyText) return;
     await message.delete().catch(() => {});
     const adminEmbed = new EmbedBuilder()
-      .setAuthor({ name: `${message.author.username} (Support Agent)`, iconURL: message.author.displayAvatarURL() })
+      .setAuthor({ name: `${message.author.username} — Support Agent`, iconURL: message.author.displayAvatarURL() })
       .setDescription(replyText)
       .setColor(0x5865f2)
       .setTimestamp();
@@ -494,7 +496,7 @@ client.on("messageCreate", async (message) => {
   if (isGreeting(text) && !ticket.collected?.issue) {
     ticket.conversationHistory = (ticket.conversationHistory || "") + `User: ${text}\n`;
     saveDB(db);
-    await message.channel.send(`Hello **${message.author.username}**! 👋 How are you?\n\nI\'m here to help with any crypto issues. Could you please describe what\'s going on so I can assist you? 🔍`);
+    await message.channel.send(`Hey **${message.author.username}**! 👋 Hope you're doing well.\n\nI'm here to help you through any crypto-related issues. Go ahead and describe what's happening and I'll get things moving. 🔍`);
     return;
   }
 
@@ -502,25 +504,25 @@ client.on("messageCreate", async (message) => {
   if (isJunk(text)) {
     saveDB(db);
     if (!ticket.collected?.issue) {
-      await message.channel.send(`Please describe your crypto issue, **${message.author.username}**. What exactly is happening? 🔍`);
+      await message.channel.send(`Go ahead and describe your issue, **${message.author.username}** — what exactly is going wrong? 🔍`);
     } else {
       const nextQ = getNextQuestion(ticket.collected, ticket.issueType, message.author.username);
-      await message.channel.send(nextQ || `Could you please elaborate a bit more? 🔍`);
+      await message.channel.send(nextQ || `Could you provide a bit more detail? 🔍`);
     }
     return;
   }
 
-  // ── Extract info from message ─────────────────────────────────────────────
+  // ── Extract Info ──────────────────────────────────────────────────────────
   ticket.collected = extractInfo(text, ticket.collected || {});
   ticket.conversationHistory = (ticket.conversationHistory || "") + `User: ${text}\n`;
 
-  // ── Classify issue on first meaningful message ────────────────────────────
+  // ── Classify Issue ────────────────────────────────────────────────────────
   if (!ticket.collected.issue) {
     ticket.collected.issue = text.slice(0, 200);
     ticket.issueType = classifyIssue(text);
   }
 
-  // ── Try Gemini to enhance extraction (fire and forget if it fails) ────────
+  // ── Optional Gemini Enhancement ───────────────────────────────────────────
   if (CONFIG.geminiKey) {
     tryGemini(ticket.conversationHistory, CONFIG.geminiKey).then(geminiData => {
       if (geminiData) {
@@ -541,48 +543,48 @@ client.on("messageCreate", async (message) => {
     }).catch(() => {});
   }
 
-  // ── Get next question ─────────────────────────────────────────────────────
+  // ── Determine Next Question ───────────────────────────────────────────────
   const nextQuestion = getNextQuestion(ticket.collected, ticket.issueType, message.author.username);
 
   if (!nextQuestion) {
-    // All info collected
+    // All info has been gathered
     ticket.infoComplete = true;
     saveDB(db);
 
     const c = ticket.collected;
     const summaryLines = [
-      c.issue     ? `• **Issue:** ${c.issue.slice(0, 100)}` : null,
-      c.walletType ? `• **Wallet:** ${c.walletType}` : null,
-      c.walletAddress ? `• **Address:** \`${c.walletAddress}\`` : null,
-      c.duration  ? `• **Duration:** ${c.duration}` : null,
+      c.issue          ? `• **Issue:** ${c.issue.slice(0, 100)}` : null,
+      c.walletType     ? `• **Wallet:** ${c.walletType}` : null,
+      c.walletAddress  ? `• **Address:** \`${c.walletAddress}\`` : null,
+      c.duration       ? `• **Duration:** ${c.duration}` : null,
       c.transactionId && c.transactionId !== "Not provided" ? `• **Transaction ID:** \`${c.transactionId}\`` : null,
-      c.amount    ? `• **Amount:** ${c.amount}` : null,
+      c.amount         ? `• **Amount:** ${c.amount}` : null,
     ].filter(Boolean).join("\n");
 
     await message.channel.send(
-      `✅ **Thank you ${message.author.username}!**\n\nWe have everything we need to assist you.\n\n📋 **Summary:**\n${summaryLines}\n\n⏳ A support agent has been notified and will be with you shortly. Please remain in this ticket. 🙏`
+      `✅ **Got everything we need, ${message.author.username}!**\n\nHere's a quick recap of what you've shared:\n\n📋 **Case Summary:**\n${summaryLines}\n\n⏳ A member of our team has been notified and will be with you shortly. Please stay in this channel. 🙏`
     );
     return;
   }
 
   saveDB(db);
 
-  // ── Contextual acknowledgement + next question ────────────────────────────
+  // ── Acknowledgement + Next Question ──────────────────────────────────────
   let ack = "";
-  if (!ticket.collected.walletType && tLower.includes("swap")) ack = "I see you\'re having a swap issue. ";
-  else if (!ticket.collected.walletType && /lost|missing|gone/i.test(tLower)) ack = "I\'m sorry to hear that. ";
-  else if (!ticket.collected.walletType && /hack|scam|stolen/i.test(tLower)) ack = "I understand this is urgent. ";
-  else if (!ticket.collected.walletType && /migrat|bridge/i.test(tLower)) ack = "Thanks for letting me know about the migration issue. ";
-  else if (ticket.collected.walletType && !ticket.collected.walletAddress) ack = `Thanks for providing your wallet type as **${ticket.collected.walletType}**. `;
+  if (!ticket.collected.walletType && tLower.includes("swap")) ack = "Noted — sounds like a swap-related issue. ";
+  else if (!ticket.collected.walletType && /lost|missing|gone/i.test(tLower)) ack = "I'm sorry to hear that — let's sort this out. ";
+  else if (!ticket.collected.walletType && /hack|scam|stolen/i.test(tLower)) ack = "Understood — we'll treat this as a priority. ";
+  else if (!ticket.collected.walletType && /migrat|bridge/i.test(tLower)) ack = "Thanks for the context on the bridge issue. ";
+  else if (ticket.collected.walletType && !ticket.collected.walletAddress) ack = `Noted — **${ticket.collected.walletType}** wallet. `;
   else if (ticket.collected.walletAddress && !ticket.collected.duration) ack = "Got it. ";
-  else ack = "Thank you! ";
+  else ack = "Appreciate that. ";
 
   await message.channel.send(`${ack}${nextQuestion}`);
 });
 
-// ─── Global Error Handler ─────────────────────────────────────────────────
+// ─── Global Error Handlers ─────────────────────────────────────────────────
 client.on("error", (err) => console.error("⚠️ Client error:", err.message));
 process.on("unhandledRejection", (err) => console.error("⚠️ Unhandled rejection:", err?.message ?? err));
 
-// ─── Login ────────────────────────────────────────────────────────────────
+// ─── Login ─────────────────────────────────────────────────────────────────
 client.login(CONFIG.token);
